@@ -1,0 +1,5 @@
+name: ProxySocket
+version: 1.0.0
+main: chowal\proxy\Loader
+author: skymin
+api: 5.0.0
