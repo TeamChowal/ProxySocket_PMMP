@@ -1,0 +1,8 @@
+#'{GroupName: string}':
+#  receive: '{port: int}'
+#  send:
+#    - ip: '{address|ip : string}'
+#      port: '{port: int}'
+#    - port: '{port: int}'
+--- []
+...

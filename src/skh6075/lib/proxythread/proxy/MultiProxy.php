@@ -12,7 +12,17 @@ use skh6075\lib\proxythread\exception\ProxyException;
 use skh6075\lib\proxythread\thread\ProxyThread;
 use Volatile;
 
-class MultiProxy extends Proxy{
+final class MultiProxy{
+
+	public const KEY_IDENTIFY = 'identify';
+	public const KEY_DATA = 'data';
+
+	public function __construct(
+		Plugin $plugin
+	){
+		$this->initialize($plugin);
+	}
+
 	/**
 	 * @phpstan-var array<string, ProxyThread>
 	 * @var ProxyThread[]
@@ -25,21 +35,23 @@ class MultiProxy extends Proxy{
 	 */
 	private array $volatiles = [];
 
-	public function initialize(Plugin $plugin) : void{
+	private function initialize(Plugin $plugin) : void{
 		$plugin->getScheduler()->scheduleRepeatingTask(new ClosureTask(function(): void{
-			foreach($this->volatiles as $key => $volatile){
+			foreach($this->volatiles as $groupName => $volatile){
 				while($volatile->count() > 0){
 					$chunk = $volatile->shift();
-					(new ProxyReceiveDataEvent($this, new ArrayIterator((array)$chunk)))->call();
+					(new ProxyReceiveDataEvent($groupName, new ArrayIterator((array)$chunk)))->call();
 				}
 			}
 		}), 5);
 	}
 
-	public function insert(string $key, ProxyThread $thread): void{
-		$this->volatiles[$key] = $thread->getReceiveQueue();
-		$this->threads[$key] = $thread;
-		$thread->start(PTHREADS_INHERIT_ALL);
+	/** @param SendServerInfo[] $sendPorts */
+	public function insert(string $groupName, int $receivePort, array $sendPorts): void{
+		$thread = new ProxyThread($receivePort, $sendPorts);
+		$this->volatiles[$groupName] = $thread->getReceiveQueue();
+		$this->threads[$groupName] = $thread;
+		$thread->start();
 	}
 
 	public function close(): void{
@@ -48,19 +60,33 @@ class MultiProxy extends Proxy{
 		}
 	}
 
-
-	public function delete(string $key): void{
-		if(!isset($this->threads[$key])){
-			throw ProxyException::wrap("No proxy found with key $key");
+	public function delete(string $groupName): void{
+		if(!isset($this->threads[$groupName])){
+			throw ProxyException::wrap("No proxy found with key $groupName");
 		}
 
-		($proxy = $this->threads[$key])->shutdown();
+		($proxy = $this->threads[$groupName])->shutdown();
+		/**
+		 * @noinspection PhpStatementHasEmptyBodyInspection
+		 * Waiting for shutdown
+		 */
 		while($proxy->isRunning()){
 		}
-		unset($this->threads[$key], $this->volatiles[$key]);
+		unset($this->threads[$groupName], $this->volatiles[$groupName]);
 	}
 
-	public function select(string $key): ?ProxyThread{
-		return $this->threads[$key] ?? null;
+	/**
+	 * @phpstan-param  array{
+	 *     identify: string,
+	 *     data: mixed
+	 * } $data
+	 *
+	 *
+	 */
+	public function send(string $groupName, array $data) : void{
+		if(!isset($this->threads[$groupName])){
+			throw ProxyException::wrap("No proxy found with key $groupName");
+		}
+		($this->threads[$groupName])->send($data);
 	}
 }

@@ -4,39 +4,48 @@ declare(strict_types=1);
 
 namespace chowal\proxy;
 
-use pocketmine\event\EventPriority;
-use pocketmine\event\player\PlayerChatEvent;
-use pocketmine\network\mcpe\protocol\TextPacket;
 use pocketmine\plugin\PluginBase;
-use skh6075\lib\proxythread\event\ProxyReceiveDataEvent;
+use RuntimeException;
 use skh6075\lib\proxythread\libProxyThread;
 use skh6075\lib\proxythread\proxy\MultiProxy;
-use skh6075\lib\proxythread\thread\ProxyThread;
+use skh6075\lib\proxythread\proxy\SendServerInfo;
+use function is_int;
+use function is_string;
 
 final class Loader extends PluginBase{
+
+	private const KEY_RECEIVE = 'receive';
+	private const KEY_SEND = 'send';
 
 	private readonly MultiProxy $proxy;
 
 	protected function onEnable() : void{
+		$this->saveDefaultConfig();
 		$this->proxy = libProxyThread::createMultiProxy($this);
-		$this->proxy->insert('lobby', new ProxyThread($this->proxy, 2500, [2501]));
-		$manager = $this->getServer()->getPluginManager();
-		$manager->registerEvent(PlayerChatEvent::class, function(PlayerChatEvent $ev) : void{
-			$this->proxy->select('lobby')->send([
-				ProxyThread::KEY_IDENTIFY => "multi-message",
-				ProxyThread::KEY_DATA => [
-					'msg' => $ev->getFormat()
-				]
-			]);
-		}, EventPriority::MONITOR, $this);
-		$manager->registerEvent(ProxyReceiveDataEvent::class, function(ProxyReceiveDataEvent $ev) : void{
-			$iterator = $ev->getIterator();
-			if($iterator->offsetGet(ProxyThread::KEY_IDENTIFY) !== "multi-message"){
-				return;
+		foreach($this->getConfig()->getAll() as $groupName => $data){
+			if(!isset($data[self::KEY_RECEIVE]) || !isset($data[self::KEY_SEND])){
+				throw new RuntimeException("Missing required elements in $groupName. ('receive', 'send'");
 			}
-			$data = $iterator->offsetGet(ProxyThread::KEY_DATA);
-			$this->getServer()->broadcastPackets($this->getServer()->getOnlinePlayers(), [TextPacket::raw($data['msg'])]);
-		}, EventPriority::MONITOR, $this);
+			$receive = $data[self::KEY_RECEIVE];
+			if(!is_int($receive)){
+				throw new RuntimeException("Port must be made of natural numbers. [$groupName/receive]");
+			}
+			if(!is_string($groupName)){
+				$groupName = (string) $groupName;
+			}
+			$sendServers = [];
+			foreach($data[self::KEY_SEND] as $index => $serverInfo){
+				if(!isset($serverInfo['port'])){
+					throw new RuntimeException("Missing required elements ('port') [$groupName/send/$index]");
+				}
+				$port = $serverInfo['port'];
+				if(!is_int($port)){
+					throw new RuntimeException("Port must be made of natural numbers. [$groupName/send/$index/port]");
+				}
+				$sendServers[] = new SendServerInfo($port, $serverInfo['ip'] ?? SendServerInfo::ADDRESS_DEFAULT);
+			}
+			$this->proxy->insert($groupName, $receive, $sendServers);
+		}
 	}
 
 	protected function onDisable() : void{

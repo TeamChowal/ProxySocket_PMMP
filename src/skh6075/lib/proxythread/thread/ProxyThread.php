@@ -6,10 +6,13 @@ namespace skh6075\lib\proxythread\thread;
 
 use InvalidArgumentException;
 use pocketmine\thread\ThreadException;
-use skh6075\lib\proxythread\proxy\Proxy;
+use skh6075\lib\proxythread\proxy\MultiProxy;
+use skh6075\lib\proxythread\proxy\SendServerInfo;
 use Socket;
 use Thread;
 use Volatile;
+use function igbinary_serialize;
+use function igbinary_unserialize;
 use function is_array;
 use function json_decode;
 use function json_encode;
@@ -20,19 +23,18 @@ use function socket_sendto;
 use function socket_set_nonblock;
 
 final class ProxyThread extends Thread{
-	public const KEY_IDENTIFY = "identify";
-	public const KEY_DATA = "data";
 
 	private bool $shutdown = false;
 
+	private string $SendServersBuffer;
 	private Volatile $sendQueue;
 	private Volatile $receiveQueue;
 
 	public function __construct(
-		private readonly Proxy $proxy,
 		private readonly int $receivePort,
-		private readonly array $sendPorts //multi-proxy-socket
+		array $sendServers //multi-proxy-socket
 	){
+		$this->SendServersBuffer = igbinary_serialize($sendServers);
 		$this->sendQueue = new Volatile();
 		$this->receiveQueue = new Volatile();
 	}
@@ -61,18 +63,19 @@ final class ProxyThread extends Thread{
 		if($sendSocket === false){
 			throw new InvalidArgumentException("Failed to create socket");
 		}
-
+		/** @phpstan-var SendServerInfo[] $sendServers */
+		$sendServers = igbinary_unserialize($this->SendServersBuffer);
 		while(!$this->shutdown){
 			$this->receiveData($receiveSocket);
 
 			while($this->sendQueue->count() > 0){
 				$chunk = $this->sendQueue->shift();
-				if(!isset($chunk[self::KEY_IDENTIFY], $chunk[self::KEY_DATA])){
+				if(!isset($chunk[MultiProxy::KEY_IDENTIFY], $chunk[MultiProxy::KEY_DATA])){
 					continue;
 				}
 
-				foreach($this->sendPorts as $port){
-					socket_sendto($sendSocket, json_encode((array) $chunk), 65535, 0, $this->proxy->getAddress(), $port);
+				foreach($sendServers as $serverInfo){
+					socket_sendto($sendSocket, json_encode((array) $chunk), 65535, 0, $serverInfo->getAddress(), $serverInfo->getPort());
 				}
 			}
 		}
@@ -92,7 +95,7 @@ final class ProxyThread extends Thread{
 
 		if($buffer !== null && $buffer !== ""){
 			$data = json_decode($buffer, true);
-			if(!is_array($data) || !isset($data[self::KEY_IDENTIFY], $data[self::KEY_DATA])){
+			if(!is_array($data) || !isset($data[MultiProxy::KEY_IDENTIFY], $data[MultiProxy::KEY_DATA])){
 				return;
 			}
 
