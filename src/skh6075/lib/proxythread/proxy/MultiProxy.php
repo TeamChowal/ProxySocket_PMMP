@@ -7,12 +7,14 @@ namespace skh6075\lib\proxythread\proxy;
 use ArrayIterator;
 use pocketmine\plugin\Plugin;
 use pocketmine\scheduler\ClosureTask;
+use pocketmine\utils\SingletonTrait;
 use skh6075\lib\proxythread\event\ProxyReceiveDataEvent;
 use skh6075\lib\proxythread\exception\ProxyException;
 use skh6075\lib\proxythread\thread\ProxyThread;
 use Volatile;
 
 final class MultiProxy{
+	use SingletonTrait;
 
 	public const KEY_IDENTIFY = 'identify';
 	public const KEY_DATA = 'data';
@@ -21,6 +23,7 @@ final class MultiProxy{
 		Plugin $plugin
 	){
 		$this->initialize($plugin);
+		self::setInstance($this);
 	}
 
 	/**
@@ -75,18 +78,24 @@ final class MultiProxy{
 		unset($this->threads[$groupName], $this->volatiles[$groupName]);
 	}
 
+	public function select(string $groupName) : ?ProxyThread{
+		return $this->threads[$groupName] ?? null;
+	}
+
 	/**
+	 * @param mixed[] $data
 	 * @phpstan-param  array{
 	 *     identify: string,
 	 *     data: mixed
-	 * } $data
+	 * }              $data
 	 *
-	 *
+	 * @throws ProxyException
 	 */
 	public function send(string $groupName, array $data) : void{
-		if(!isset($this->threads[$groupName])){
+		$thread = $this->select($groupName);
+		if($thread === null){
 			throw ProxyException::wrap("No proxy found with key $groupName");
 		}
-		($this->threads[$groupName])->send($data);
+		$thread->send($data);
 	}
 }

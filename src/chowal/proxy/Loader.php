@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace chowal\proxy;
 
+use pocketmine\event\EventPriority;
+use pocketmine\event\player\PlayerChatEvent;
+use pocketmine\network\mcpe\protocol\TextPacket;
 use pocketmine\plugin\PluginBase;
 use RuntimeException;
+use skh6075\lib\proxythread\event\ProxyReceiveDataEvent;
 use skh6075\lib\proxythread\libProxyThread;
 use skh6075\lib\proxythread\proxy\MultiProxy;
 use skh6075\lib\proxythread\proxy\SendServerInfo;

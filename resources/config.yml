@@ -1,8 +1,18 @@
+#struct
 #'{GroupName: string}':
 #  receive: '{port: int}'
 #  send:
 #    - ip: '{address|ip : string}'
 #      port: '{port: int}'
 #    - port: '{port: int}'
+
+#exampe
+#all:
+#  receive: 1000
+#  send:
+#    - ip: 0.0.0.0
+#      port: 2000
+#    - port: 1001 //If you do not enter ip, it will be treated as the default IP
+#    - port: 1003
 --- []
 ...

@@ -85,7 +85,7 @@ final class ProxyThread extends Thread{
 
 	private function receiveData(Socket $receiveSocket) : void{
 		$buffer = "";
-		if(socket_recvfrom($receiveSocket, $buffer, 65535, 0, $source) === false){
+		if(socket_recvfrom($receiveSocket, $buffer, 65535, 0, $source, $port) === false){
 			$errno = socket_last_error($receiveSocket);
 			if($errno === SOCKET_EWOULDBLOCK){
 				return;
@@ -103,6 +103,13 @@ final class ProxyThread extends Thread{
 		}
 	}
 
+	/**
+	 * @param mixed[] $data
+	 * @phpstan-param  array{
+	 *     identify: string,
+	 *     data: mixed
+	 * } $data
+	 */
 	public function send(array $data) : void{
 		$this->sendQueue[] = $data;
 	}
